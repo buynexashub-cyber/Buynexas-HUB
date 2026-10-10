@@ -318,9 +318,10 @@ function saveTrackedCustomerOrder(order) {
 
 function renderSavedCustomerOrders() {
   const orders = getSavedCustomerOrders();
-  const list = document.querySelector("#my-orders-list");
-  if (!list) return;
-  list.innerHTML = orders.length ? orders.map((order) => {
+  const lists = [document.querySelector("#my-orders-list"), document.querySelector("#customer-order-page-list")].filter(Boolean);
+  if (!lists.length) return;
+  const emptyState = `<p class="saved-orders-empty">No orders saved on this device yet. Orders placed on another device will not appear here.</p>`;
+  const rendered = orders.length ? orders.map((order) => {
     const items = Array.isArray(order.items) ? order.items.map((item) => {
       const product = item.product || item;
       return {name:product.name || item.name || item.productName || "Product details unavailable",variant:item.variant || product.variant || "Standard",quantity:Number(item.quantity) || 1,price:Number(product.price ?? item.price) || 0,image:product.image || item.image || ""};
@@ -328,7 +329,12 @@ function renderSavedCustomerOrders() {
     const total = Number(order.total) || items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const date = order.createdAt && !Number.isNaN(Date.parse(order.createdAt)) ? new Date(order.createdAt).toLocaleString() : "Date unavailable";
     return `<article class="saved-order"><div class="saved-order-head"><div class="saved-order-meta"><strong>${escapeMarkup(order.id || "Order")}</strong><span>${escapeMarkup(date)}</span></div><span class="saved-order-status">${escapeMarkup(order.status || "Confirmed")}</span><strong class="saved-order-total">${money(total)}</strong></div><div class="saved-order-items">${items.length ? items.map((item) => `<div class="saved-order-item">${/^https?:\/\//i.test(item.image) ? `<img src="${escapeMarkup(item.image)}" alt="">` : ""}<span><strong>${escapeMarkup(item.name)}</strong><small>${escapeMarkup(item.variant)} · Qty ${item.quantity}</small></span><strong>${money(item.price * item.quantity)}</strong></div>`).join("") : `<p class="saved-orders-empty">Product details are unavailable for this saved order.</p>`}</div></article>`;
-  }).join("") : `<p class="saved-orders-empty">No orders saved on this device yet. Orders placed on another device will not appear here.</p>`;
+  }).join("") : emptyState;
+
+  lists.forEach((list) => {
+    list.innerHTML = rendered;
+    if (list.id === "my-orders-list") list.classList.toggle("hide", !orders.length);
+  });
 }
 
 function makeWhatsAppMessage(items, customer, orderId = "") {
