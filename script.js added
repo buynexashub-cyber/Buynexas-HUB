@@ -158,20 +158,43 @@ async function loadStoreData() {
       requestStoreData("reviews")
     ]);
 
-    if (Array.isArray(catalog)) {
-      products.splice(0, products.length, ...catalog.map((item) => ({
-        ...item,
-        price: Number(item.price),
-        oldPrice: Number(item.oldPrice),
-        stock: Number(item.stock),
-        active: String(item.active).toLowerCase() !== "false",
-        variants: Array.isArray(item.variants)
-          ? item.variants
-          : String(item.variants || "").split(",").map((value) => value.trim()).filter(Boolean),
-        images: [item.image, item.image].filter(Boolean),
-        rating: "0.0",
-        reviews: 0
-      })));
+    if (Array.isArray(catalog) && catalog.length > 0) {
+      const mergedProducts = [...products];
+      const liveProducts = catalog
+        .filter((item) => item && (item.id || item.productId) && (item.name || item.productName))
+        .map((item) => ({
+          ...item,
+          id: String(item.id || item.productId || "").trim(),
+          name: String(item.name || item.productName || "").trim(),
+          category: String(item.category || "General").trim(),
+          price: Number(item.price) || 0,
+          oldPrice: Number(item.oldPrice) || Number(item.price) || 0,
+          stock: Number.isFinite(Number(item.stock)) ? Number(item.stock) : 10,
+          active: String(item.active).toLowerCase() !== "false",
+          variants: Array.isArray(item.variants)
+            ? item.variants
+            : String(item.variants || "").split(",").map((value) => value.trim()).filter(Boolean),
+          image: item.image || (Array.isArray(item.images) ? item.images[0] : ""),
+          images: Array.isArray(item.images) ? item.images.filter(Boolean) : [item.image].filter(Boolean),
+          rating: "0.0",
+          reviews: 0,
+          badge: String(item.badge || "NEW").trim() || "NEW"
+        }))
+        .filter((item) => item.id && item.name);
+
+      if (liveProducts.length > 0) {
+        const existing = new Map(mergedProducts.map((product) => [product.id, product]));
+        liveProducts.forEach((product) => {
+          if (existing.has(product.id)) {
+            const index = mergedProducts.findIndex((item) => item.id === product.id);
+            mergedProducts[index] = { ...mergedProducts[index], ...product };
+          } else {
+            mergedProducts.push(product);
+          }
+        });
+
+        products.splice(0, products.length, ...mergedProducts);
+      }
     }
 
     customerReviews = Array.isArray(reviews) ? reviews : [];
@@ -190,9 +213,9 @@ async function loadStoreData() {
 }
 
 function renderProducts() {
-  if (!productGrid || !sortSelect) return;
+  if (!productGrid) return;
 
-  const sort = sortSelect.value;
+  const sort = sortSelect ? sortSelect.value : "featured";
   let visible = products.filter((product) => {
     const matchesFilter = currentFilter === "All" || (currentFilter === "Trending" ? product.badge === "TRENDING" : product.category === currentFilter);
     const searchableText = `${product.name} ${product.category} ${product.description} ${product.badge}`.toLowerCase();
