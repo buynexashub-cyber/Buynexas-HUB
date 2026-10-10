@@ -16,6 +16,28 @@ products.forEach((product) => { product.stock = Number.isFinite(product.stock) ?
 
 const money = (amount) => `Rs. ${Number(amount).toLocaleString("en-PK")}`;
 const productUrl = (product) => `${location.href.split("#")[0]}#product/${product.id}`;
+
+function normalizeProductImageUrl(url) {
+  if (!url) return "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80";
+  const trimmed = String(url).trim();
+  if (!trimmed) return "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80";
+
+  const fileMatch = trimmed.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
+  if (fileMatch) return `https://drive.google.com/uc?export=view&id=${fileMatch[1]}`;
+
+  const openMatch = trimmed.match(/drive\.google\.com\/open\?id=([^&]+)/i);
+  if (openMatch) return `https://drive.google.com/uc?export=view&id=${openMatch[1]}`;
+
+  return trimmed;
+}
+
+function getProductImage(product) {
+  if (!product) return "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80";
+  const candidates = [product.image, Array.isArray(product.images) ? product.images[0] : "", product.heroImage];
+  const selected = candidates.find((value) => Boolean(value));
+  return normalizeProductImageUrl(selected);
+}
+
 const cart = new Map();
 let activeProduct = null;
 let activeVariant = "";
@@ -134,13 +156,16 @@ function renderProducts() {
   });
   if (sort === "price-low") visible = visible.sort((a, b) => a.price - b.price);
   if (sort === "price-high") visible = visible.sort((a, b) => b.price - a.price);
-  productGrid.innerHTML = visible.length ? visible.map((product) => `<article class="product-card">
-    <div class="product-image-wrap"><img class="product-image" src="${product.image}" alt="${product.name}" loading="lazy"><span class="product-badge">${product.badge}</span><button class="wishlist-button ${wishlist.has(product.id) ? "saved" : ""}" type="button" data-wishlist="${product.id}" aria-label="${wishlist.has(product.id) ? "Remove from" : "Add to"} wishlist">${wishlist.has(product.id) ? "♥" : "♡"}</button></div>
+  productGrid.innerHTML = visible.length ? visible.map((product) => {
+    const imageUrl = getProductImage(product);
+    return `<article class="product-card">
+    <div class="product-image-wrap"><img class="product-image" src="${imageUrl}" alt="${product.name}" loading="lazy"><span class="product-badge">${product.badge}</span><button class="wishlist-button ${wishlist.has(product.id) ? "saved" : ""}" type="button" data-wishlist="${product.id}" aria-label="${wishlist.has(product.id) ? "Remove from" : "Add to"} wishlist">${wishlist.has(product.id) ? "♥" : "♡"}</button></div>
     <div class="product-meta"><span class="product-category">${product.category}</span><span class="product-rating">★ ${product.rating} <span style="color:#96978e">(${product.reviews})</span></span></div>
     <h3 class="product-name" data-product="${product.id}">${product.name}</h3><div class="product-prices"><strong>${money(product.price)}</strong>${product.oldPrice > product.price ? `<span class="old-price">${money(product.oldPrice)}</span><span class="discount">${Math.round((1-product.price/product.oldPrice)*100)}% OFF</span>` : ""}</div>
     <p class="stock-note ${product.stock === 0 ? "sold-out" : product.stock <= 5 ? "low-stock" : ""}">${product.stock === 0 ? "Sold out" : product.stock <= 5 ? `Only ${product.stock} left` : "In stock"}</p>
     <div class="product-actions"><button class="product-add" type="button" data-add="${product.id}" ${product.stock === 0 ? "disabled" : ""}>Add to bag <span>+</span></button><button class="product-checkout" type="button" data-checkout="${product.id}" ${product.stock === 0 ? "disabled" : ""}>${product.stock === 0 ? "Sold out" : "Checkout <span>↗</span>"}</button></div>
-  </article>`).join("") : `<p class="no-products">${searchTerm ? `No products match “${searchTerm}”. Try another search.` : "No products are available right now. Please check back soon."}</p>`;
+  </article>`;
+  }).join("") : `<p class="no-products">${searchTerm ? `No products match “${searchTerm}”. Try another search.` : "No products are available right now. Please check back soon."}</p>`;
 }
 
 function showToast(message) {
@@ -172,7 +197,7 @@ function renderCart() {
   const count = items.reduce((sum, [, item]) => sum + item.quantity, 0);
   document.querySelectorAll(".cart-count").forEach((el) => { el.textContent = count; });
   document.querySelector("#cart-subtotal").textContent = money(items.reduce((sum, [, item]) => sum + item.quantity * item.product.price, 0));
-  document.querySelector("#cart-items").innerHTML = items.length ? items.map(([key, item]) => `<div class="cart-row"><img src="${item.product.image}" alt=""><div><h3>${item.product.name}</h3><p>${item.variant} · ${money(item.product.price)}</p><div class="quantity-control"><button type="button" data-cart-qty="${key}" data-change="-1" aria-label="Decrease quantity">−</button><span>${item.quantity}</span><button type="button" data-cart-qty="${key}" data-change="1" aria-label="Increase quantity">+</button><button type="button" class="remove-item" data-remove="${key}">Remove</button></div></div><span class="cart-row-price">${money(item.product.price * item.quantity)}</span></div>`).join("") : `<p class="empty-cart">Your bag is taking a little breather.<br>Find something lovely to bring it back.</p>`;
+  document.querySelector("#cart-items").innerHTML = items.length ? items.map(([key, item]) => `<div class="cart-row"><img src="${getProductImage(item.product)}" alt=""><div><h3>${item.product.name}</h3><p>${item.variant} · ${money(item.product.price)}</p><div class="quantity-control"><button type="button" data-cart-qty="${key}" data-change="-1" aria-label="Decrease quantity">−</button><span>${item.quantity}</span><button type="button" data-cart-qty="${key}" data-change="1" aria-label="Increase quantity">+</button><button type="button" class="remove-item" data-remove="${key}">Remove</button></div></div><span class="cart-row-price">${money(item.product.price * item.quantity)}</span></div>`).join("") : `<p class="empty-cart">Your bag is taking a little breather.<br>Find something lovely to bring it back.</p>`;
   document.querySelector(".checkout-button").disabled = !items.length;
 }
 
@@ -198,10 +223,15 @@ function openProduct(product) {
   activeProduct = product;
   activeVariant = product.variants[0];
   activeQuantity = 1;
-  productModal.innerHTML = `<div class="modal-panel"><button class="modal-close" type="button" aria-label="Close product details">×</button><div class="product-modal-content"><img class="modal-product-photo" src="${product.images[0]}" alt="${product.name}"><div class="modal-product-info"><span class="product-category">${product.category}</span><h2>${product.name}</h2><div class="modal-rating">★ ${product.rating} &nbsp; <span style="color:#898b82">${product.reviews} lovely reviews</span></div><div class="modal-price"><strong>${money(product.price)}</strong><span class="old-price">${money(product.oldPrice)}</span><span class="discount">${Math.round((1-product.price/product.oldPrice)*100)}% OFF</span></div><p class="modal-description">${product.description}</p><p class="variant-label">${product.category === "Fashion" ? "SELECT SIZE" : "SELECT OPTION"}</p><div class="variant-options">${product.variants.map((variant, index) => `<button type="button" class="variant-option ${index === 0 ? "selected" : ""}" data-variant="${variant}">${variant}</button>`).join("")}</div><p class="variant-label">QUANTITY</p><div class="modal-actions"><div class="modal-quantity"><button type="button" data-modal-qty="-1" aria-label="Decrease quantity">−</button><span class="modal-quantity-value">1</span><button type="button" data-modal-qty="1" aria-label="Increase quantity">+</button></div><button class="button button-dark add-modal-cart" type="button">Add to cart <span>+</span></button><button class="button order-now" type="button">Order now <span>↗</span></button></div><p class="delivery-note">Cash on delivery available · Nationwide delivery</p></div></div></div>`;
+  const mainImage = getProductImage(product);
+  const galleryImages = (Array.isArray(product.images) ? product.images : [product.image]).filter(Boolean).map((image) => normalizeProductImageUrl(image));
+  productModal.innerHTML = `<div class="modal-panel"><button class="modal-close" type="button" aria-label="Close product details">×</button><div class="product-modal-content"><img class="modal-product-photo" src="${mainImage}" alt="${product.name}"><div class="modal-product-info"><span class="product-category">${product.category}</span><h2>${product.name}</h2><div class="modal-rating">★ ${product.rating} &nbsp; <span style="color:#898b82">${product.reviews} lovely reviews</span></div><div class="modal-price"><strong>${money(product.price)}</strong><span class="old-price">${money(product.oldPrice)}</span><span class="discount">${Math.round((1-product.price/product.oldPrice)*100)}% OFF</span></div><p class="modal-description">${product.description}</p><p class="variant-label">${product.category === "Fashion" ? "SELECT SIZE" : "SELECT OPTION"}</p><div class="variant-options">${product.variants.map((variant, index) => `<button type="button" class="variant-option ${index === 0 ? "selected" : ""}" data-variant="${variant}">${variant}</button>`).join("")}</div><p class="variant-label">QUANTITY</p><div class="modal-actions"><div class="modal-quantity"><button type="button" data-modal-qty="-1" aria-label="Decrease quantity">−</button><span class="modal-quantity-value">1</span><button type="button" data-modal-qty="1" aria-label="Increase quantity">+</button></div><button class="button button-dark add-modal-cart" type="button">Add to cart <span>+</span></button><button class="button order-now" type="button">Order now <span>↗</span></button></div><p class="delivery-note">Cash on delivery available · Nationwide delivery</p></div></div></div>`;
   productModal.classList.add("open");
   productModal.setAttribute("aria-hidden", "false");
   productModal.querySelector(".modal-product-info h2").insertAdjacentHTML("afterend", `<button class="wishlist-button modal-wishlist ${wishlist.has(product.id) ? "saved" : ""}" type="button" data-modal-wishlist aria-label="${wishlist.has(product.id) ? "Remove from" : "Add to"} wishlist">${wishlist.has(product.id) ? "♥" : "♡"} Save</button>`);
+  if (galleryImages.length > 1 && productModal.querySelector(".modal-product-photo")) {
+    productModal.querySelector(".modal-product-photo").src = galleryImages[0];
+  }
   productModal.querySelector(".modal-panel").insertAdjacentHTML("beforeend", renderReviews(product));
   productModal.querySelector(".delivery-note").textContent = product.stock === 0 ? "Sold out · Check back soon" : product.stock <= 5 ? `Only ${product.stock} left · COD · Nationwide delivery` : "In stock · Cash on delivery · Nationwide delivery";
   if (product.stock === 0) productModal.querySelectorAll(".add-modal-cart,.order-now").forEach((button) => { button.disabled = true; });
